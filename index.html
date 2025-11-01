@@ -179,12 +179,14 @@
             transform: translate(-50%, -50%);
             cursor: pointer;
             z-index: 5;
-            background: rgba(0, 0, 255, 0);
+            background: rgba(102, 126, 234, 0.15); /* Subtle purple dots at 15% opacity */
             transition: background 0.2s;
+            border: 1px solid rgba(102, 126, 234, 0.25); /* Subtle border */
         }
         
         .house-overlay:hover {
-            background: rgba(0, 0, 255, 0.2);
+            background: rgba(102, 126, 234, 0.6); /* More visible on hover */
+            border: 1px solid rgba(102, 126, 234, 0.8);
         }
         
         .house-tooltip {
@@ -2137,7 +2139,7 @@ const data = [
         const marker = document.getElementById('marker');
         const mapWrapper = document.querySelector('.map-wrapper');
 
-        function showMarker(lat, lon) {
+        function showMarker(lat, lon, resident = null) {
             if (!lat || !lon) {
                 marker.classList.remove('show');
                 return;
@@ -2145,8 +2147,11 @@ const data = [
 
             const pos = latLonToPercent(lat, lon);
             
-            marker.style.left = pos.x + '%';
-            marker.style.top = pos.y + '%';
+            // Apply street-specific offset if resident data is available
+            const offset = resident ? getStreetOffset(resident) : DEFAULT_OFFSET;
+            
+            marker.style.left = (pos.x + offset.x) + '%';
+            marker.style.top = (pos.y + offset.y) + '%';
             marker.classList.add('show');
             
             // Scroll to show the marker
@@ -2157,15 +2162,61 @@ const data = [
 
         
         // Create hover overlays for all houses
+        // ============================================================================
+        // DANBURY PARK SPECIFIC MAP ADJUSTMENTS
+        // ============================================================================
+        // These offsets compensate for positioning errors specific to the current
+        // stylized map image. If you're using this code for a different location
+        // or map, DELETE THIS ENTIRE SECTION and set all offsets to 0.
+        //
+        // Offsets are in percentage points (e.g., -4 means shift left by 4%)
+        // ============================================================================
+        
+        const STREET_OFFSETS = {
+            // Streets that need leftward adjustment
+            'Trimingham': { x: 0, y: 0 },   // Back to center (no offset)
+            'Elliott': { x: 0, y: 0 },      // Back to center (no offset)
+            'Oxsen': { x: -2, y: 0 },       // Just slightly left
+            'Groth': { x: 0, y: 0 },        // Back to center (no offset)
+            
+            // Add more streets here as needed, format:
+            // 'Street Name': { x: horizontal_offset, y: vertical_offset },
+        };
+        
+        // Default offset for all other streets (currently +2% right from previous adjustment)
+        const DEFAULT_OFFSET = { x: 2, y: 0 };
+        
+        function getStreetOffset(resident) {
+            // Special case: North-south segment of Trimingham (1535-1565 and 1546-1562)
+            if (resident.Street === 'Trimingham' && resident.AddressNumber) {
+                const num = parseInt(resident.AddressNumber);
+                if ((num >= 1535 && num <= 1565) || (num >= 1546 && num <= 1562)) {
+                    return { x: -2, y: 0 };  // -2% to cancel the +2% default = 0% total
+                }
+            }
+            
+            // Check if this street has a specific offset
+            if (resident.Street && STREET_OFFSETS[resident.Street]) {
+                return STREET_OFFSETS[resident.Street];
+            }
+            // Otherwise use the default
+            return DEFAULT_OFFSET;
+        }
+        
+        // ============================================================================
+        // END DANBURY PARK SPECIFIC ADJUSTMENTS
+        // ============================================================================
+        
         function createHouseOverlays() {
             data.forEach(resident => {
                 if (resident.Latitude && resident.Longitude) {
                     const pos = latLonToPercent(resident.Latitude, resident.Longitude);
+                    const offset = getStreetOffset(resident);
                     
                     const overlay = document.createElement('div');
                     overlay.className = 'house-overlay';
-                    overlay.style.left = pos.x + '%';
-                    overlay.style.top = pos.y + '%';
+                    overlay.style.left = (pos.x + offset.x) + '%';
+                    overlay.style.top = (pos.y + offset.y) + '%';
                     
                     const tooltip = document.createElement('div');
                     tooltip.className = 'house-tooltip';
@@ -2190,7 +2241,7 @@ const data = [
                     resultDiv.classList.add('show');
                     
                     // Show marker on map using geocoded coordinates
-                    showMarker(resident.Latitude, resident.Longitude);
+                    showMarker(resident.Latitude, resident.Longitude, resident);
                 }
             } else {
                 resultDiv.classList.remove('show');
